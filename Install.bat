@@ -1,6 +1,14 @@
 @echo off
 setlocal
 
+REM Check if curl is installed
+where curl >nul 2>nul
+if errorlevel 1 (
+    echo curl is not installed. 
+    call :install_curl_options
+    exit /b
+)
+
 REM Function to display curl installation options
 :install_curl_options
 cls
@@ -38,19 +46,19 @@ if errorlevel 1 (
 
 echo Extracting curl...
 powershell -Command "Expand-Archive -Path %curl_output% -DestinationPath C:\curl; Remove-Item %curl_output%"
-echo Curl has been installed to C:\curl. Please add C:\curl\bin to your PATH environment variable.
+echo Curl has been installed to C:\curl.
+
+REM Automatically add C:\curl\bin to the PATH environment variable
+set "curl_bin_path=C:\curl\bin"
+powershell -Command "[System.Environment]::SetEnvironmentVariable('Path', $env:Path + ';%curl_bin_path%', [System.EnvironmentVariableTarget]::Machine)"
+echo C:\curl\bin has been added to your PATH environment variable.
 
 echo Please restart the script to continue.
 pause
+
+REM Restart the script
 powershell -Command "Start-Process -FilePath 'powershell.exe' -ArgumentList '-File %~f0' -Verb RunAs"
 exit /b
-
-REM Check if curl is installed
-where curl >nul 2>nul
-if errorlevel 1 (
-    echo curl is not installed. 
-    call :install_curl_options
-)
 
 REM Define URLs for the installers
 set "NPP_URL=https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.7.7/npp.8.7.7.Installer.x64.exe"
@@ -78,7 +86,8 @@ set "SILENT_ARGS=%~3"
 
 REM Check if URL is empty
 if "%URL%"=="" (
-    echo No URL provided for download. Exiting...
+    echo No URL provided for download. Exiting ...
+    echo...
     pause
     exit /b
 )
@@ -87,75 +96,57 @@ echo Downloading %OUTPUT% from %URL%...
 powershell -Command "Invoke-WebRequest -Uri %URL% -OutFile %OUTPUT%" 2>nul
 if errorlevel 1 (
     echo PowerShell failed to download %OUTPUT%. Trying curl...
-    curl -L -o %OUTPUT% %URL% 2>nul
+    curl -L -o %OUTPUT% %URL%
     if errorlevel 1 (
-        echo Error downloading %OUTPUT% using curl. Please check the URL.
+        echo Error downloading %OUTPUT%. Please check the URL.
         pause
         exit /b
     )
 )
 
-if exist %OUTPUT% (
-    echo Download completed successfully.
-    
-    echo Installing %OUTPUT%...
-    if defined SILENT_ARGS (
-        start /wait %OUTPUT% %SILENT_ARGS%
-    ) else (
-        start /wait %OUTPUT%
-    )
-    
-    echo Installation completed.
+echo Installing %OUTPUT%...
+if defined SILENT_ARGS (
+    start /wait "" "%OUTPUT%" %SILENT_ARGS%
 ) else (
-    echo Download failed for %OUTPUT%. Please check the URL.
+    start /wait "" "%OUTPUT%"
 )
 
-REM Clean up
-del %OUTPUT% 2>nul
+echo %OUTPUT% has been installed successfully.
+del "%OUTPUT%"
 exit /b
 
-REM Function to display menu
-:menu
-cls
-echo ===========================
-echo      Software Installer
-echo ===========================
-echo 1. Notepad++
-echo 2. Steam
-echo 3. Epic Games Launcher
-echo 4. Rockstar Games Launcher
-echo 5. Ubisoft Connect
-echo 6. EA App
-echo 7. WinRAR
-echo 8. Exit
-echo ===========================
-set /p app_choice="Choose an application to install (1-8): "
+REM Main script execution
+echo Checking for installed software...
 
-REM Set the URL and output file based on user choice
-if "%app_choice%"=="1" (
-    set "SELECTED_URL=%NPP_URL%"
-    set "SELECTED_OUTPUT=%NPP_OUTPUT%"
-) else if "%app_choice%"=="2" (
-    set "SELECTED_URL=%STEAM_URL%"
-    set "SELECTED_OUTPUT=%STEAM_OUTPUT%"
-) else if "%app_choice%"=="3" (
-    set "SELECTED_URL=%EPIC_URL%"
-    set "SELECTED_OUTPUT=%EPIC_OUTPUT%"
-) else if "%app_choice%"=="4" (
-    set "SELECTED_URL=%ROCKSTAR_URL%"
-    set "SELECTED_OUTPUT=%ROCKSTAR_OUTPUT%"
-) else if "%app_choice%"=="5" (
-    set "SELECTED_URL=%UBISOFT_URL%"
-    set "SELECTED_OUTPUT=%UBISOFT_OUTPUT%"
-) else if "%app_choice%"=="6" (
-    set "SELECTED_URL=%EA_URL%"
-    set "SELECTED_OUTPUT=%EA_OUTPUT%"
-) else if "%app_choice%"=="7" (
-    set "SELECTED_URL=%WINRAR_URL%"
-    set "SELECTED_OUTPUT=%WINRAR_OUTPUT%"
+REM Function to prompt for installation or skip
+:prompt_install_or_skip
+set "APP_NAME=%~1"
+set "APP_URL=%~2"
+set "APP_OUTPUT=%~3"
+set "APP_ARGS=%~4"
+
+echo Do you want to install %APP_NAME%? (Y/N/Skip)
+set /p user_choice="Choose an option (Y/N/Skip): "
+
+if /I "%user_choice%"=="Y" (
+    call :install_software "%APP_URL%" "%APP_OUTPUT%" "%APP_ARGS%"
+) else if /I "%user_choice%"=="N" (
+    echo Skipping %APP_NAME% installation.
+) else if /I "%user_choice%"=="Skip" (
+    echo Skipping %APP_NAME% installation.
 ) else (
-    exit /b
+    echo Invalid choice. Please enter Y, N, or Skip.
+    goto prompt_install_or_skip %APP_NAME% %APP_URL% %APP_OUTPUT% %APP_ARGS%
 )
 
-call :install_software "%SELECTED_URL%" "%SELECTED_OUTPUT%"
-goto menu
+call :prompt_install_or_skip "Notepad++" "%NPP_URL%" "%NPP_OUTPUT%" "/S"
+call :prompt_install_or_skip "Steam" "%STEAM_URL%" "%STEAM_OUTPUT%" "/S"
+call :prompt_install_or_skip "Epic Games Launcher" "%EPIC_URL%" "%EPIC_OUTPUT%" "/quiet"
+call :prompt_install_or_skip "Rockstar Games Launcher" "%ROCKSTAR_URL%" "%ROCKSTAR_OUTPUT%" "/S"
+call :prompt_install_or_skip "Ubisoft Connect" "%UBISOFT_URL%" "%UBISOFT_OUTPUT%" "/S"
+call :prompt_install_or_skip "EA App" "%EA_URL%" "%EA_OUTPUT%" "/S"
+call :prompt_install_or_skip "WinRAR" "%WINRAR_URL%" "%WINRAR_OUTPUT%" "/S"
+
+echo All software installations are complete.
+pause
+exit /b
